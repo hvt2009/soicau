@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI PREDICTOR v5.0</title>
+    <style>
+        :root {
+            --bg-color: #07080e;
+            --panel-bg: #0f121f;
+            --neon-cyan: #00f0ff;
+            --banker-red: #ff3344;
+            --player-blue: #0066ff;
+            --tie-green: #00e676;
+            --text-main: #f1f5f9;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); display: flex; flex-direction: column; align-items: center; padding: 15px; }
+        .app-card { width: 100%; max-width: 420px; background: var(--panel-bg); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 20px; padding: 20px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); }
+        .capital-box { background: rgba(0, 240, 255, 0.05); padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px dashed var(--neon-cyan); text-align: center; }
+        .capital-box input { width: 85%; background: transparent; border: none; border-bottom: 2px solid var(--neon-cyan); color: var(--neon-cyan); font-size: 1.6rem; font-weight: bold; text-align: center; outline: none; }
+        .display-panel { background: rgba(0, 0, 0, 0.3); border-radius: 15px; padding: 20px; text-align: center; margin-bottom: 20px; border: 1px solid rgba(0, 240, 255, 0.1); }
+        .main-prediction { font-size: 2.2rem; font-weight: 900; margin: 5px 0; text-transform: uppercase; }
+        .bet-advice { font-size: 1.4rem; font-weight: bold; margin-bottom: 10px; letter-spacing: 1px; }
+        .c-wait { color: #475569; }
+        .c-b { color: var(--banker-red); text-shadow: 0 0 15px rgba(255, 51, 68, 0.5); }
+        .c-p { color: var(--player-blue); text-shadow: 0 0 15px rgba(0, 102, 255, 0.5); }
+        .c-skip { color: #ffbb00; }
+        .sub-info { display: flex; justify-content: space-between; gap: 10px; margin-top: 10px; }
+        .info-box { background: rgba(255, 255, 255, 0.03); flex: 1; padding: 8px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.05); }
+        .label { font-size: 0.65rem; color: #64748b; text-transform: uppercase; }
+        .value { font-size: 0.85rem; font-weight: bold; }
+        .bead-track { display: flex; gap: 6px; background: rgba(0, 0, 0, 0.4); padding: 12px; border-radius: 12px; min-height: 45px; overflow-x: auto; margin-bottom: 20px; }
+        .dot { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.75rem; font-weight: bold; flex-shrink: 0; }
+        .dot.B { background: var(--banker-red); }
+        .dot.P { background: var(--player-blue); }
+        .dot.T { background: var(--tie-green); }
+        .key-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .pad-btn { padding: 18px 5px; border: none; border-radius: 12px; color: #fff; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
+        .pad-p { background: var(--player-blue); }
+        .pad-b { background: var(--banker-red); }
+        .pad-t { background: var(--tie-green); }
+        .ctrl-btn { padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; background: #1e293b; color: #94a3b8; font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+
+    <div class="app-card">
+        <div class="capital-box">
+            <div class="label" style="color: var(--neon-cyan);">VỐN (VNĐ)</div>
+            <input type="number" id="userCapital" value="1000000" oninput="update()">
+        </div>
+
+        <div class="display-panel">
+            <div id="betMoney" class="bet-advice">---</div>
+            <div id="out" class="main-prediction c-wait">CHỜ DỮ LIỆU</div>
+            <div class="sub-info">
+                <div class="info-box"><div class="label">Thế cầu</div><div id="pattern" class="value">---</div></div>
+                <div class="info-box"><div class="label">Tin cậy</div><div id="rate" class="value">0%</div></div>
+            </div>
+        </div>
+
+        <div id="track" class="bead-track"></div>
+
+        <div class="key-grid">
+            <button class="pad-btn pad-p" onclick="add('P')">P</button>
+            <button class="pad-btn pad-t" onclick="add('T')">T</button>
+            <button class="pad-btn pad-b" onclick="add('B')">B</button>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <button class="ctrl-btn" onclick="del()">XÓA VÁN CŨ</button>
+            <button class="ctrl-btn" style="color:var(--banker-red)" onclick="reset()">LÀM MỚI</button>
+        </div>
+    </div>
+
+    <script>
+        let memory = [];
+
+        function formatMoney(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(0) + 'k';
+            return num;
+        }
+
+        // HÀM LÀM TRÒN THEO CHIP CASINO (10, 20, 50...)
+        function roundToChips(amount) {
+            if (amount < 10000) return 10000;
+            // Làm tròn về đơn vị 10.000 gần nhất
+            return Math.round(amount / 10000) * 10000;
+        }
+
+        function add(type) { memory.push(type); if(memory.length > 25) memory.shift(); update(); }
+        function del() { memory.pop(); update(); }
+        function reset() { memory = []; update(); }
+
+        function update() {
+            const track = document.getElementById('track');
+            track.innerHTML = '';
+            memory.forEach(m => {
+                const d = document.createElement('div');
+                d.className = `dot ${m}`; d.innerText = m;
+                track.appendChild(d);
+            });
+            track.scrollLeft = track.scrollWidth;
+            analyze();
+        }
+
+        function setOutput(decision, name, r, level) {
+            const out = document.getElementById('out');
+            const betMoney = document.getElementById('betMoney');
+            const capital = parseFloat(document.getElementById('userCapital').value) || 0;
+
+            out.innerText = decision;
+            out.className = "main-prediction " + (decision === 'BANKER' ? 'c-b' : (decision === 'PLAYER' ? 'c-p' : 'c-skip'));
+            document.getElementById('pattern').innerText = name;
+            document.getElementById('rate').innerText = r;
+
+            if (decision === 'BỎ QUA' || decision === 'DỪNG LẠI') {
+                betMoney.innerText = "SKIP";
+                betMoney.style.color = "#64748b";
+            } else {
+                let percent = level === 'BIG' ? 0.1 : (level === 'MEDIUM' ? 0.05 : 0.03);
+                let color = level === 'BIG' ? "#00ff66" : (level === 'MEDIUM' ? "#00f0ff" : "#ffbb00");
+                let tag = level === 'BIG' ? "VÀO LỚN" : (level === 'MEDIUM' ? "VÀO VỪA" : "VÀO NHỎ");
+
+                let rawAmount = capital * percent;
+                let chipAmount = roundToChips(rawAmount); // Áp dụng làm tròn phỉnh
+                
+                betMoney.innerText = tag + ": " + formatMoney(chipAmount);
+                betMoney.style.color = color;
+            }
+        }
+
+        function analyze() {
+            const lastV = memory[memory.length - 1];
+            const cleanS = memory.filter(x => x !== 'T').join('');
+
+            if (cleanS.length < 3) {
+                setOutput('ĐANG SOI...', 'Đang nạp dữ liệu', '0%', 'SMALL');
+                return;
+            }
+
+            if (lastV === 'T' && (/B{6,}$/.test(cleanS) || /P{6,}$/.test(cleanS))) {
+                setOutput('DỪNG LẠI', 'RỦI RO 33/33/33', '---', 'NONE');
+                return;
+            }
+
+            const logic = [
+                { reg: /B{5,}$/, pick: "B", name: "BỆT CÁI DÀI", r: "95%", lv: "BIG" },
+                { reg: /P{5,}$/, pick: "P", name: "BỆT CON DÀI", r: "95%", lv: "BIG" },
+                { reg: /BBBPBB$/, pick: "B", name: "ĐỐI XỨNG 3-1-3", r: "92%", lv: "MEDIUM" },
+                { reg: /PPPBPP$/, pick: "P", name: "ĐỐI XỨNG 3-1-3", r: "92%", lv: "MEDIUM" },
+                { reg: /BBPPPB$/, pick: "B", name: "ĐỐI XỨNG 2-3-2", r: "90%", lv: "MEDIUM" },
+                { reg: /PPBBBP$/, pick: "P", name: "ĐỐI XỨNG 2-3-2", r: "90%", lv: "MEDIUM" },
+                { reg: /BPPBB$/, pick: "B", name: "CẦU SÓNG 1-2-3", r: "88%", lv: "SMALL" },
+                { reg: /PBBPP$/, pick: "P", name: "CẦU SÓNG 1-2-3", r: "88%", lv: "SMALL" },
+                { reg: /BBBPP$/, pick: "P", name: "CẦU BA 3-3", r: "85%", lv: "MEDIUM" },
+                { reg: /PPPBB$/, pick: "B", name: "CẦU BA 3-3", r: "85%", lv: "MEDIUM" },
+                { reg: /BPB$/, pick: "P", name: "PING PONG 1-1", r: "87%", lv: "BIG" },
+                { reg: /PBP$/, pick: "B", name: "PING PONG 1-1", r: "87%", lv: "BIG" },
+                { reg: /BBPPB$/, pick: "B", name: "CẦU ĐÔI 2-2", r: "84%", lv: "BIG" },
+                { reg: /PPBBP$/, pick: "P", name: "CẦU ĐÔI 2-2", r: "84%", lv: "BIG" },
+                { reg: /B{3,4}$/, pick: "B", name: "BỆT DÍNH", r: "82%", lv: "SMALL" },
+                { reg: /P{3,4}$/, pick: "P", name: "BỆT DÍNH", r: "82%", lv: "SMALL" },
+                { reg: /BPBPP$/, pick: "B", name: "CẦU ZIGZAC", r: "80%", lv: "SMALL" },
+                { reg: /PBPBB$/, pick: "P", name: "CẦU ZIGZAC", r: "80%", lv: "SMALL" },
+                { reg: /BPPB$/, pick: "B", name: "NHẢY ĐÔI / CHỮ V", r: "78%", lv: "SMALL" },
+                { reg: /PBBP$/, pick: "P", name: "NHẢY ĐÔI / CHỮ V", r: "78%", lv: "SMALL" },
+                { reg: /BBBP$/, pick: "P", name: "CẦU GÃY", r: "70%", lv: "SMALL" },
+                { reg: /PPPB$/, pick: "B", name: "CẦU GÃY", r: "70%", lv: "SMALL" }
+            ];
+
+            let found = false;
+            for (let item of logic) {
+                if (item.reg.test(cleanS)) {
+                    setOutput(item.pick === 'B' ? 'BANKER' : 'PLAYER', item.name, item.r, item.lv);
+                    found = true; break;
+                }
+            }
+            if (!found) setOutput('BỎ QUA', 'Cầu không rõ', '--', 'NONE');
+        }
+    </script>
+</body>
+</html>
